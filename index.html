@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Emoji Memory Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <style>
+    :root {
+      --bg-dark: radial-gradient(circle at top, #1f1f2f, #000);
+      --bg-light: #fefefe;
+      --text-dark: #fff;
+      --text-light: #111;
+      --accent: #0ff;
+      --card-bg-dark: rgba(255,255,255,0.08);
+      --card-bg-light: #e0f7fa;
+      --card-border-light: #0aa;
+      --card-border-dark: #0ff6;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+      transition: background 0.5s, color 0.5s;
+    }
+
+    body[data-theme="dark"] {
+      background: var(--bg-dark);
+      color: var(--text-dark);
+    }
+
+    body[data-theme="light"] {
+      background: var(--bg-light);
+      color: var(--text-light);
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin: 10px 0;
+      color: var(--accent);
+      text-shadow: 0 0 6px var(--accent);
+    }
+
+    #toggleTheme {
+      background: none;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    select, button {
+      background: rgba(0,255,255,0.15);
+      color: var(--accent);
+      padding: 10px 16px;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      margin: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    select:hover, button:hover {
+      background: rgba(0,255,255,0.25);
+    }
+
+    #grid {
+      display: grid;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 12px;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .card {
+      aspect-ratio: 1 / 1;
+      font-size: clamp(1.5rem, 6vw, 2rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      border: 1px solid;
+      box-shadow: 0 0 8px var(--accent);
+      transition: background 0.3s, color 0.3s;
+    }
+
+    body[data-theme="dark"] .card {
+      background: var(--card-bg-dark);
+      border-color: var(--card-border-dark);
+      color: var(--text-dark);
+    }
+
+    body[data-theme="light"] .card {
+      background: var(--card-bg-light);
+      border-color: var(--card-border-light);
+      color: var(--text-light);
+    }
+
+    .card.hidden {
+      color: transparent;
+    }
+
+    .label {
+      position: absolute;
+      bottom: 4px;
+      right: 6px;
+      font-size: 0.65rem;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    #timebar-container {
+      width: 90%;
+      height: 8px;
+      background: #333;
+      border-radius: 5px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    #timebar {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, lime, yellow, orange, red);
+      transition: width 0.1s linear;
+    }
+
+    #levelInfo, #target, #status {
+      font-size: 1.1rem;
+      margin: 8px;
+      text-align: center;
+    }
+
+    @media (min-width: 300px) {
+      #grid.grid-3 { grid-template-columns: repeat(3, 1fr); }
+      #grid.grid-4 { grid-template-columns: repeat(4, 1fr); }
+      #grid.grid-5 { grid-template-columns: repeat(5, 1fr); }
+    }
+  </style>
+</head>
+<body data-theme="dark">
+  <div class="topbar">
+    <h1>🧠 Emoji Memory</h1>
+    <button id="toggleTheme">🌙 Theme</button>
+  </div>
+
+  <div id="levelInfo">Level: 1 (3x3)</div>
+  <select id="levelSelect">
+    <option value="3">Level 1 (3x3)</option>
+    <option value="4">Level 2 (4x4)</option>
+    <option value="5">Level 3 (5x5)</option>
+  </select>
+  <button onclick="startGame()">🔁 Start Game</button>
+
+  <div id="timebar-container"><div id="timebar"></div></div>
+  <div id="target">Memorize the grid...</div>
+  <div id="grid" class="grid-3"></div>
+  <div id="status"></div>
+
+  <script>
+    const allEmojis = ['🍎','🚗','🐶','🎈','🎮','🎲','🌟','⚽','🍕','📚','💡','🍩','🧠','🎤','🌈','🪀','🐱','🍇','🚀','🐸','🛴','🧃','🧩','📱','🎧','🧽'];
+    let grid = [], gridNames = [], gridSize = 3, targetEmoji = '', targetIndex = -1, revealed = true;
+    let timebarInterval;
+
+    const toggleBtn = document.getElementById("toggleTheme");
+    toggleBtn.onclick = () => {
+      const theme = document.body.getAttribute("data-theme");
+      document.body.setAttribute("data-theme", theme === "light" ? "dark" : "light");
+    };
+
+    document.getElementById("levelSelect").addEventListener("change", (e) => {
+      gridSize = parseInt(e.target.value);
+      document.getElementById("levelInfo").textContent = `Level: ${e.target.selectedIndex + 1} (${gridSize}x${gridSize})`;
+      document.getElementById("grid").className = `grid-${gridSize}`;
+    });
+
+    function startGame() {
+      clearInterval(timebarInterval);
+      const totalCards = gridSize * gridSize;
+      grid = shuffle([...allEmojis]).slice(0, totalCards);
+      gridNames = generateGridNames(gridSize);
+      const gridContainer = document.getElementById('grid');
+      gridContainer.innerHTML = '';
+      document.getElementById('status').textContent = '';
+      document.getElementById('target').textContent = '🧠 Memorize the grid...';
+      revealed = true;
+      resetTimebar();
+      startTimebar(4);
+
+      grid.forEach((emoji, i) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.textContent = emoji;
+        card.dataset.index = i;
+        card.onclick = () => handleClick(i);
+        gridContainer.appendChild(card);
+      });
+
+      setTimeout(() => {
+        document.querySelectorAll('.card').forEach((card, i) => {
+          card.classList.add('hidden');
+          card.innerHTML = `<div class="label">${gridNames[i]}</div>`;
+        });
+        revealed = false;
+        pickTarget();
+      }, 4000);
+    }
+
+    function generateGridNames(size) {
+      const names = [];
+      for (let r = 0; r < size; r++) {
+        for (let c = 1; c <= size; c++) {
+          names.push(String.fromCharCode(65 + r) + c); // A1, B2, etc.
+        }
+      }
+      return names;
+    }
+
+    function pickTarget() {
+      targetIndex = Math.floor(Math.random() * grid.length);
+      targetEmoji = grid[targetIndex];
+      document.getElementById('target').textContent = `🎯 Find: ${targetEmoji}`;
+    }
+
+    function handleClick(i) {
+      if (revealed) return;
+      const cards = document.querySelectorAll('.card');
+      cards[i].classList.remove('hidden');
+      cards[i].textContent = grid[i];
+
+      if (grid[i] === targetEmoji && i === targetIndex) {
+        document.getElementById('status').textContent = `✅ Correct! ${gridNames[i]} had ${targetEmoji}`;
+      } else {
+        document.getElementById('status').textContent = `❌ Wrong! ${gridNames[targetIndex]} had ${targetEmoji}`;
+      }
+
+      setTimeout(() => {
+        pickTarget();
+        cards.forEach((card, idx) => {
+          card.classList.add('hidden');
+          card.innerHTML = `<div class="label">${gridNames[idx]}</div>`;
+        });
+      }, 1500);
+    }
+
+    function shuffle(array) {
+      return array.sort(() => Math.random() - 0.5);
+    }
+
+    function resetTimebar() {
+      document.getElementById('timebar').style.width = '100%';
+    }
+
+    function startTimebar(seconds) {
+      const bar = document.getElementById('timebar');
+      let width = 100;
+      const step = 100 / (seconds * 10);
+      timebarInterval = setInterval(() => {
+        width -= step;
+        bar.style.width = width + '%';
+        if (width <= 0) clearInterval(timebarInterval);
+      }, 100);
+    }
+
+    startGame(); // auto-start
+  </script>
+</body>
+</html>
