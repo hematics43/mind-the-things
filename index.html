@@ -39,27 +39,25 @@
 
     .topbar {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
+      gap: 8px;
       width: 100%;
-      max-width: 600px;
+      max-width: 700px;
     }
 
-    h1 {
-      font-size: 1.6rem;
-      margin: 10px 0;
+    .topbar h1 {
+      margin: 5px 0;
+      font-size: 2rem;
       color: var(--accent);
-      text-shadow: 0 0 6px var(--accent);
+      text-shadow: 0 0 8px var(--accent);
     }
 
-    #toggleTheme {
-      background: none;
-      border: 1px solid var(--accent);
-      color: var(--accent);
-      padding: 6px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.8rem;
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
     }
 
     select, button {
@@ -68,7 +66,6 @@
       padding: 10px 16px;
       border: 1px solid var(--accent);
       border-radius: 10px;
-      margin: 6px;
       font-size: 1rem;
       cursor: pointer;
       transition: 0.3s;
@@ -89,7 +86,7 @@
 
     .card {
       aspect-ratio: 1 / 1;
-      font-size: clamp(1.5rem, 6vw, 2rem);
+      font-size: clamp(2rem, 8vw, 3.5rem);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -122,7 +119,7 @@
       position: absolute;
       bottom: 4px;
       right: 6px;
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       opacity: 0.7;
       pointer-events: none;
     }
@@ -143,8 +140,8 @@
       transition: width 0.1s linear;
     }
 
-    #levelInfo, #target, #status {
-      font-size: 1.1rem;
+    #levelInfo, #target, #status, #score {
+      font-size: 1.2rem;
       margin: 8px;
       text-align: center;
     }
@@ -154,22 +151,33 @@
       #grid.grid-4 { grid-template-columns: repeat(4, 1fr); }
       #grid.grid-5 { grid-template-columns: repeat(5, 1fr); }
     }
+
+    .flash {
+      animation: flash 0.6s ease-in-out 2;
+    }
+
+    @keyframes flash {
+      0%, 100% { background-color: transparent; }
+      50% { background-color: gold; }
+    }
   </style>
 </head>
 <body data-theme="dark">
   <div class="topbar">
     <h1>🧠 Emoji Memory</h1>
-    <button id="toggleTheme">🌙 Theme</button>
+    <div class="controls">
+      <select id="levelSelect">
+        <option value="3">Level 1 (3x3)</option>
+        <option value="4">Level 2 (4x4)</option>
+        <option value="5">Level 3 (5x5)</option>
+      </select>
+      <button onclick="startGame()">🔁 Restart</button>
+      <button id="toggleTheme">🌙 Theme</button>
+    </div>
   </div>
 
   <div id="levelInfo">Level: 1 (3x3)</div>
-  <select id="levelSelect">
-    <option value="3">Level 1 (3x3)</option>
-    <option value="4">Level 2 (4x4)</option>
-    <option value="5">Level 3 (5x5)</option>
-  </select>
-  <button onclick="startGame()">🔁 Start Game</button>
-
+  <div id="score">Score: 0 | 🏆 Best: 0</div>
   <div id="timebar-container"><div id="timebar"></div></div>
   <div id="target">Memorize the grid...</div>
   <div id="grid" class="grid-3"></div>
@@ -178,10 +186,9 @@
   <script>
     const allEmojis = ['🍎','🚗','🐶','🎈','🎮','🎲','🌟','⚽','🍕','📚','💡','🍩','🧠','🎤','🌈','🪀','🐱','🍇','🚀','🐸','🛴','🧃','🧩','📱','🎧','🧽'];
     let grid = [], gridNames = [], gridSize = 3, targetEmoji = '', targetIndex = -1, revealed = true;
-    let timebarInterval;
+    let timebarInterval, score = 0, bestScore = 0;
 
-    const toggleBtn = document.getElementById("toggleTheme");
-    toggleBtn.onclick = () => {
+    document.getElementById("toggleTheme").onclick = () => {
       const theme = document.body.getAttribute("data-theme");
       document.body.setAttribute("data-theme", theme === "light" ? "dark" : "light");
     };
@@ -202,6 +209,8 @@
       document.getElementById('status').textContent = '';
       document.getElementById('target').textContent = '🧠 Memorize the grid...';
       revealed = true;
+      score = 0;
+      updateScore();
       resetTimebar();
       startTimebar(4);
 
@@ -228,7 +237,7 @@
       const names = [];
       for (let r = 0; r < size; r++) {
         for (let c = 1; c <= size; c++) {
-          names.push(String.fromCharCode(65 + r) + c); // A1, B2, etc.
+          names.push(String.fromCharCode(65 + r) + c);
         }
       }
       return names;
@@ -248,6 +257,12 @@
 
       if (grid[i] === targetEmoji && i === targetIndex) {
         document.getElementById('status').textContent = `✅ Correct! ${gridNames[i]} had ${targetEmoji}`;
+        score++;
+        updateScore();
+        if (score === grid.length) {
+          document.body.classList.add("flash");
+          setTimeout(() => document.body.classList.remove("flash"), 1200);
+        }
       } else {
         document.getElementById('status').textContent = `❌ Wrong! ${gridNames[targetIndex]} had ${targetEmoji}`;
       }
@@ -259,6 +274,12 @@
           card.innerHTML = `<div class="label">${gridNames[idx]}</div>`;
         });
       }, 1500);
+    }
+
+    function updateScore() {
+      bestScore = Math.max(score, localStorage.getItem("bestScore-" + gridSize) || 0);
+      localStorage.setItem("bestScore-" + gridSize, bestScore);
+      document.getElementById("score").textContent = `Score: ${score} | 🏆 Best: ${bestScore}`;
     }
 
     function shuffle(array) {
@@ -280,7 +301,7 @@
       }, 100);
     }
 
-    startGame(); // auto-start
+    startGame(); // Initial load
   </script>
 </body>
 </html>
